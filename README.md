@@ -1,5 +1,7 @@
 # Codex Reset Alarm
 
+<img src="assets/codex-reset-alarm.png" alt="Codex Reset Alarm icon" width="128">
+
 [中文](#中文) · [English](#english)
 
 ## English

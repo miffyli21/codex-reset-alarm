@@ -29,6 +29,7 @@ interface State {
 }
 
 const FEED_URL = "https://codex-reset.com/api/feed";
+const BARK_ICON_URL = "https://raw.githubusercontent.com/miffyli21/codex-reset-alarm/main/assets/codex-reset-alarm.png";
 const STATE_KEY = "monitor-state-v1";
 const MAX_NOTIFIED_IDS = 200;
 
@@ -152,7 +153,7 @@ type AlertMode = "auto" | "wake" | "silent";
 
 async function sendBark(env: Env, title: string, body: string, target: string, critical: boolean, mode: AlertMode = "auto"): Promise<void> {
   const payload: Record<string, unknown> = {
-    device_key: env.BARK_DEVICE_KEY, title, body, group: "codex-reset-alarm", url: target,
+    device_key: env.BARK_DEVICE_KEY, title, body, group: "codex-reset-alarm", url: target, icon: BARK_ICON_URL,
   };
   if (critical) {
     if (mode === "wake" || (mode === "auto" && isWakeWindowInChina(new Date()))) {
