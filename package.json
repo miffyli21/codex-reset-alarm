@@ -1,0 +1,17 @@
+{
+  "name": "codex-reset-alarm",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "wrangler": "latest"
+  }
+}
