@@ -26,6 +26,7 @@ interface State {
   lastErrorNoticeAt: string | null;
   lastSignal: string | null;
   lastAlarmAt: string | null;
+  recentAlerts?: { tweetId: string; kind: "upcoming" | "completed"; acceptedAt: string }[];
 }
 
 const FEED_URL = "https://codex-reset.com/api/feed";
@@ -49,7 +50,8 @@ export default {
 
 export async function runMonitor(env: Env, now: Date): Promise<void> {
   const oldState = await readState(env);
-  let state = oldState;
+  // Keep the original snapshot intact so the final change check sees cursor and dedup updates.
+  let state: State | null = oldState ? structuredClone(oldState) : null;
   try {
     const response = await fetch(FEED_URL, { headers: { Accept: "application/json", "User-Agent": "codex-reset-alarm/1.0" } });
     if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
@@ -78,13 +80,16 @@ export async function runMonitor(env: Env, now: Date): Promise<void> {
       if (state.notifiedIds.includes(tweet.id)) continue;
       const level = classifyTweet(tweet);
       if (level === 2) {
-        if (isCompletedReset(tweet)) {
+        const completed = isCompletedReset(tweet);
+        if (completed) {
           await sendBark(env, "✅ CODEX 已经重置", barkBody(tweet, "Codex 已经重置，可以继续使用。"), tweet.url, true, "silent");
         } else {
           const explanation = `${explainTweet(tweet)}\n${resetTimingInChina(tweet)}`;
           await sendBark(env, "🚨 CODEX 即将重置", barkBody(tweet, explanation), tweet.url, true);
         }
         state.lastAlarmAt = now.toISOString();
+        const kind: "completed" | "upcoming" = completed ? "completed" : "upcoming";
+        state.recentAlerts = [...(state.recentAlerts ?? []), { tweetId: tweet.id, kind, acceptedAt: now.toISOString() }].slice(-20);
       }
       if (level > 0) state.notifiedIds = [...state.notifiedIds, tweet.id].slice(-MAX_NOTIFIED_IDS);
       state.cursorAt = tweet.at;
@@ -200,6 +205,7 @@ function renderDashboard(state: State | null, url: URL): Response {
       <dt>Latest Tibo post</dt><dd>${formatTime(state?.cursorAt)}</dd>
       <dt>Last reset signal</dt><dd>${escapeHtml(state?.lastSignal ?? "—")}</dd>
       <dt>Last alarm</dt><dd>${formatTime(state?.lastAlarmAt)}</dd>
+      <dt>Recent accepted alerts</dt><dd>${state?.recentAlerts?.length ?? 0}${state?.recentAlerts?.length ? `（最近：${escapeHtml(state.recentAlerts.at(-1)!.kind)} / ${formatTime(state.recentAlerts.at(-1)!.acceptedAt)}）` : ""}</dd>
     </dl>
     <form method="post" action="/action/test"><input type="password" name="token" placeholder="ADMIN TOKEN" required><button>TEST ALARM</button></form>
   </main>`);
@@ -216,7 +222,7 @@ function newestTweet(tweets: FeedTweet[]): FeedTweet | undefined { return [...tw
 function compareTweet(a: FeedTweet, b: FeedTweet): number { return Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id); }
 function compareTweetToCursor(tweet: FeedTweet, state: State): number { return Date.parse(tweet.at) - Date.parse(state.cursorAt) || tweet.id.localeCompare(state.cursorId); }
 function isAfterCursor(tweet: FeedTweet, state: State): boolean { return compareTweetToCursor(tweet, state) > 0; }
-function withoutCheck(state: State | null): unknown { if (!state) return null; const { lastPersistedCheck: _, ...rest } = state; return rest; }
+function withoutCheck(state: State | null): unknown { if (!state) return null; const { lastPersistedCheck: _, lastFeedFetchedAt: __, ...rest } = state; return rest; }
 function formatTime(value?: string | null): string { if (!value) return "—"; const d = new Date(value); return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false }); }
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!); }
 function safeEqual(a: string, b: string): boolean { if (a.length !== b.length) return false; let diff = 0; for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i); return diff === 0; }

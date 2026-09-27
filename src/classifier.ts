@@ -31,13 +31,15 @@ const COMPLETED_RESET_PATTERNS = [
 ];
 
 const ARRIVING_BANKED = new Set(["arriving", "incoming", "landing", "pending", "soon", "scheduled"]);
+const DISTANT_RESET_PATTERN = /\b(?:next\s+(?:week|month)|later\s+this\s+(?:week|month)|in\s+(?:the\s+)?coming\s+(?:weeks|months))\b/i;
 
 export function classifyTweet(tweet: FeedTweet): AlarmLevel {
+  if (isCompletedReset(tweet)) return 2;
+  if (DISTANT_RESET_PATTERN.test(tweet.text)) return 0;
   if (tweet.explicit_reset_claim === true) return 2;
   if (tweet.tibo_lane === "reset_announcement") return 2;
   if (tweet.kind === "banked" && tweet.banked_state && ARRIVING_BANKED.has(tweet.banked_state.toLowerCase())) return 2;
   if (FUTURE_RESET_PATTERNS.some((pattern) => pattern.test(tweet.text))) return 2;
-  if (COMPLETED_RESET_PATTERNS.some((pattern) => pattern.test(tweet.text))) return 2;
   return 0;
 }
 
