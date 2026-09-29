@@ -21,6 +21,9 @@ It deliberately ignores vague teasers and ordinary discussion. Each matching
 post ID is persisted in Cloudflare KV and notified at most once. There is no
 acknowledgement workflow.
 
+Feed failures are recorded on the status dashboard and retried automatically;
+they do not send Bark notifications.
+
 ### Notification policy (China Standard Time)
 
 | Signal | 23:00–15:59 | 16:00–22:59 |
@@ -95,6 +98,8 @@ its cursor without alerting on historical entries.
 - feed 明确标为 reset announcement 的消息。
 
 普通讨论、模糊预告不会提醒。每个匹配消息只提醒一次；消息 ID 存在 Cloudflare KV 中，没有 ACK 流程。
+
+数据源故障只记录在状态页面并自动重试，不会通过 Bark 推送。
 
 ### 北京时间作息策略
 

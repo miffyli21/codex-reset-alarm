@@ -23,7 +23,6 @@ interface State {
   lastFeedFetchedAt: string;
   feedStale: boolean;
   feedError: string | null;
-  lastErrorNoticeAt: string | null;
   lastSignal: string | null;
   lastAlarmAt: string | null;
   recentAlerts?: { tweetId: string; kind: "upcoming" | "completed"; acceptedAt: string }[];
@@ -68,7 +67,7 @@ export async function runMonitor(env: Env, now: Date): Promise<void> {
         notifiedIds: [],
         lastPersistedCheck: now.toISOString(), lastFeedFetchedAt: feed.fetched_at,
         feedStale: stale, feedError: stale ? "Feed 数据过期" : null,
-        lastErrorNoticeAt: null, lastSignal: feed.signal?.summary ?? null, lastAlarmAt: null,
+        lastSignal: feed.signal?.summary ?? null, lastAlarmAt: null,
       };
       await env.STATE.put(STATE_KEY, JSON.stringify(state));
       return;
@@ -106,7 +105,6 @@ export async function runMonitor(env: Env, now: Date): Promise<void> {
     state.feedStale = stale;
     state.feedError = stale ? "Feed 数据过期超过 30 分钟" : null;
     state.lastSignal = feed.signal?.summary ?? state.lastSignal;
-    if (stale) await maybeNotifyError(env, state, now, state.feedError ?? "Feed 数据过期");
 
     const checkpointDue = now.getTime() - Date.parse(state.lastPersistedCheck) >= 15 * 60_000;
     const changed = JSON.stringify(withoutCheck(oldState)) !== JSON.stringify(withoutCheck(state));
@@ -120,16 +118,11 @@ export async function runMonitor(env: Env, now: Date): Promise<void> {
       state = {
         cursorAt: "", cursorId: "", notifiedIds: [],
         lastPersistedCheck: now.toISOString(), lastFeedFetchedAt: "", feedStale: true,
-        feedError: message, lastErrorNoticeAt: null, lastSignal: null, lastAlarmAt: null,
+        feedError: message, lastSignal: null, lastAlarmAt: null,
       };
     }
     state.feedStale = true;
     state.feedError = message;
-    try {
-      await maybeNotifyError(env, state, now, message);
-    } catch (noticeError) {
-      console.error("Bark error notice failed", { message: noticeError instanceof Error ? noticeError.message : "unknown" });
-    }
     const checkpointDue = now.getTime() - Date.parse(state.lastPersistedCheck) >= 15 * 60_000;
     const changed = JSON.stringify(withoutCheck(oldState)) !== JSON.stringify(withoutCheck(state));
     if (changed || checkpointDue) {
@@ -175,12 +168,6 @@ async function sendBark(env: Env, title: string, body: string, target: string, c
 
 function barkBody(tweet: FeedTweet, explanation: string): string {
   return `${tweet.text}\n\n${explanation}\n发布时间：${formatTime(tweet.at)}\n原始链接：${tweet.url}`;
-}
-
-async function maybeNotifyError(env: Env, state: State, now: Date, message: string): Promise<void> {
-  if (state.lastErrorNoticeAt && now.getTime() - Date.parse(state.lastErrorNoticeAt) < 60 * 60_000) return;
-  await sendBark(env, "⚠️ Reset Monitor 数据源异常", `${message}\n监控会继续自动重试。`, "", false);
-  state.lastErrorNoticeAt = now.toISOString();
 }
 
 async function handleTest(request: Request, env: Env): Promise<Response> {
